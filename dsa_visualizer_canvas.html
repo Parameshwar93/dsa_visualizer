@@ -1,0 +1,1479 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-slate-950 text-slate-100">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Interactive DSA & Pathfinding Visualizer</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- p5.js CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+  <!-- FontAwesome CDN -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #0f172a; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #475569; }
+
+    .highlight-line {
+      background-color: rgba(99, 102, 241, 0.25);
+      border-left: 3px solid #818cf8;
+      font-weight: 600;
+      color: #f1f5f9;
+    }
+
+    /* Splitter Handles */
+    .gutter-horizontal {
+      cursor: col-resize;
+      background-color: #1e293b;
+      transition: background-color 0.2s;
+    }
+    .gutter-horizontal:hover, .gutter-horizontal:active {
+      background-color: #6366f1;
+    }
+    .gutter-vertical {
+      cursor: row-resize;
+      background-color: #1e293b;
+      transition: background-color 0.2s;
+    }
+    .gutter-vertical:hover, .gutter-vertical:active {
+      background-color: #6366f1;
+    }
+
+    /* Path banner pulse */
+    @keyframes goldGlow {
+      0%, 100% { box-shadow: 0 0 15px rgba(234, 179, 8, 0.3); }
+      50% { box-shadow: 0 0 25px rgba(234, 179, 8, 0.6); }
+    }
+    .path-found-banner {
+      animation: goldGlow 2s infinite;
+    }
+  </style>
+</head>
+<body class="h-full flex flex-col font-sans overflow-hidden select-none bg-slate-950">
+
+  <header class="bg-slate-900 border-b border-slate-800 px-5 py-2.5 flex flex-wrap items-center justify-between gap-3 shrink-0">
+    <div class="flex items-center space-x-3">
+      <div class="p-2 bg-indigo-600 rounded-lg shadow-lg shadow-indigo-500/20 text-white">
+        <i class="fa-solid fa-route text-lg"></i>
+      </div>
+      <div>
+        <h1 class="text-lg font-bold tracking-tight text-white flex items-center gap-2">
+          DSA & Shortest Path Visualizer <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30">p5.js Visualizer</span>
+        </h1>
+        <p class="text-[11px] text-slate-400">Interactive Data Structures, Sorting & Optimal Pathfinding Engine</p>
+      </div>
+    </div>
+
+    <!-- Global Execution Controls -->
+    <div class="flex items-center gap-2.5 bg-slate-950 border border-slate-800 p-1.5 rounded-xl">
+      <button id="btnPlayPause" onclick="togglePlayPause()" class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs flex items-center gap-1.5 transition">
+        <i id="iconPlayPause" class="fa-solid fa-play"></i> <span id="textPlayPause">Play</span>
+      </button>
+      <button id="btnStep" onclick="stepForward()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium text-xs flex items-center gap-1.5 transition">
+        <i class="fa-solid fa-step-forward"></i> Step
+      </button>
+      <button id="btnReset" onclick="resetCurrentDS()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-rose-400 font-medium text-xs flex items-center gap-1.5 transition">
+        <i class="fa-solid fa-rotate-left"></i> Reset
+      </button>
+
+      <div class="h-4 w-px bg-slate-800 mx-1"></div>
+
+      <div class="flex items-center gap-2 px-2">
+        <i class="fa-solid fa-gauge-high text-xs text-slate-400"></i>
+        <span class="text-xs text-slate-400 font-mono">Speed:</span>
+        <input type="range" id="speedSlider" min="1" max="60" value="30" class="w-20 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500">
+      </div>
+    </div>
+  </header>
+
+  <div id="mainLayout" class="flex-1 flex overflow-hidden relative">
+    
+    <!-- Sidebar Control Panel -->
+    <aside id="leftPanel" class="w-80 bg-slate-900/90 border-r border-slate-800 flex flex-col p-4 overflow-y-auto space-y-4 shrink-0 min-w-[240px] max-w-[480px]">
+      
+      <!-- Module Selector -->
+      <div class="space-y-2.5">
+        <label class="text-xs font-bold text-slate-400 tracking-wider uppercase flex items-center gap-1.5">
+          <i class="fa-solid fa-layer-group text-indigo-400"></i> Module Selector
+        </label>
+        
+        <div>
+          <label class="block text-[11px] text-slate-400 mb-1">Category</label>
+          <select id="categorySelect" onchange="onCategoryChange()" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 transition">
+            <option value="graph">Graph & Pathfinding Search</option>
+            <option value="ds">Data Structures</option>
+            <option value="sort">Sorting Algorithms</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-[11px] text-slate-400 mb-1">Target Visualizer</label>
+          <select id="targetSelect" onchange="onTargetChange()" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 transition">
+            <!-- Populated via JS -->
+          </select>
+        </div>
+      </div>
+
+      <hr class="border-slate-800">
+
+      <!-- Dynamic Operations Control Panel -->
+      <div class="space-y-3 flex-1">
+        <label class="text-xs font-bold text-slate-400 tracking-wider uppercase flex items-center gap-1.5">
+          <i class="fa-solid fa-sliders text-indigo-400"></i> Action Controls & Node Setup
+        </label>
+
+        <!-- Dynamic inputs render here -->
+        <div id="dynamicControls" class="space-y-3">
+          <!-- Rendered programmatically -->
+        </div>
+      </div>
+
+      <!-- Color Key Legend -->
+      <div class="bg-slate-950/80 border border-slate-800/80 rounded-xl p-3 space-y-2">
+        <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Color Key & Legend</div>
+        <div class="grid grid-cols-2 gap-2 text-[11px]">
+          <div class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-indigo-500 inline-block"></span> Unvisited Node</div>
+          <div class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block"></span> Visiting / Open Set</div>
+          <div class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-sky-500 inline-block"></span> Visited / Closed Set</div>
+          <div class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block"></span> Optimal Target</div>
+          <div class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-purple-500 inline-block"></span> Start Node</div>
+          <div class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-yellow-400 inline-block"></span> Shortest Path Edge</div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Horizontal Drag Splitter -->
+    <div id="horizontalSplitter" class="gutter-horizontal w-1.5 h-full shrink-0"></div>
+
+    <!-- Center Canvas & Bottom Explanation Split -->
+    <div class="flex-1 flex flex-col overflow-hidden min-w-0 relative">
+      
+      <!-- Live Status & Stats Bar -->
+      <div class="bg-slate-900/80 border-b border-slate-800 px-4 py-2 flex items-center justify-between gap-4 shrink-0">
+        <div class="flex items-center gap-2 text-xs font-mono text-slate-300 overflow-hidden text-ellipsis whitespace-nowrap">
+          <span class="p-1 px-2 rounded bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 font-bold uppercase tracking-wider text-[10px]">Status</span>
+          <span id="statusMessage">Visualizer ready. Select start and target nodes to execute pathfinding.</span>
+        </div>
+        <div class="flex items-center gap-4 text-xs font-mono text-slate-400 whitespace-nowrap">
+          <span id="statMetric">Cost / Metric: 0</span>
+          <span id="stepCounter">Step: 0/0</span>
+        </div>
+      </div>
+
+      <!-- Shortest Path Dynamic Overlay Banner -->
+      <div id="pathSummaryBanner" class="hidden absolute top-12 left-1/2 -translate-x-1/2 z-20 bg-slate-900/95 border-2 border-yellow-500/80 text-yellow-300 px-5 py-2.5 rounded-xl shadow-2xl path-found-banner flex items-center gap-3 backdrop-blur-md">
+        <div class="p-2 bg-yellow-500/20 rounded-lg text-yellow-400 text-lg">
+          <i class="fa-solid fa-trophy"></i>
+        </div>
+        <div>
+          <div class="text-[10px] font-bold text-yellow-400 uppercase tracking-widest">Shortest Path Solution</div>
+          <div id="pathSummaryText" class="text-sm font-bold font-mono text-white">Path: A ➔ H ➔ F ➔ G (Total Cost = 10)</div>
+        </div>
+      </div>
+
+      <!-- p5 Canvas Parent Box -->
+      <div id="canvasParent" class="flex-1 relative w-full h-full min-h-[220px]">
+        <!-- p5.js Canvas appended here -->
+      </div>
+
+      <!-- Vertical Drag Splitter -->
+      <div id="verticalSplitter" class="gutter-vertical h-1.5 w-full shrink-0"></div>
+
+      <!-- Bottom Drawer (Pseudocode & Plain Language Breakdown) -->
+      <div id="bottomDrawer" class="h-48 bg-slate-900 border-t border-slate-800 flex flex-col md:flex-row overflow-hidden shrink-0 min-h-[120px] max-h-[350px]">
+        
+        <!-- Algorithm Code Trace -->
+        <div class="w-full md:w-1/2 border-r border-slate-800 flex flex-col overflow-hidden">
+          <div class="bg-slate-950 px-3 py-1.5 border-b border-slate-800 text-[11px] font-bold uppercase tracking-wider text-slate-400 flex justify-between items-center">
+            <span><i class="fa-solid fa-code text-indigo-400 me-1"></i> Pseudocode Trace</span>
+            <span id="algoNameDisplay" class="text-indigo-400 font-mono">Algorithm</span>
+          </div>
+          <div id="codeDisplay" class="p-2.5 font-mono text-[11px] overflow-y-auto flex-1 space-y-0.5 text-slate-400">
+            <!-- Line-by-line pseudocode -->
+          </div>
+        </div>
+
+        <!-- Plain Language Explanation Box -->
+        <div class="w-full md:w-1/2 flex flex-col bg-slate-900/50 overflow-hidden">
+          <div class="bg-slate-950 px-3 py-1.5 border-b border-slate-800 text-[11px] font-bold uppercase tracking-wider text-slate-400">
+            <i class="fa-solid fa-lightbulb text-amber-400 me-1"></i> How It Works (Simple Explanation)
+          </div>
+          <div id="infoDisplay" class="p-3 text-xs text-slate-300 overflow-y-auto leading-relaxed flex-1 space-y-2">
+            Select a module to inspect concept explanations and real-time step execution details.
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Global State Engine
+    let animationQueue = [];
+    let queueIndex = 0;
+    let isPlaying = false;
+    let frameStepCounter = 0;
+
+    let currentCategory = 'graph';
+    let currentTarget = 'dijkstra';
+
+    let canvasWidth = 800;
+    let canvasHeight = 400;
+
+    // --- DS Buffers ---
+    let arrayData = [15, 32, 8, 42, 23, 67, 19];
+    let highlightedIndices = {}; 
+    let stackData = [10, 25, 40, 55];
+    let queueData = [12, 34, 56, 78];
+
+    let linkedListNodes = [
+      { id: 1, val: 14 },
+      { id: 2, val: 28 },
+      { id: 3, val: 42 },
+      { id: 4, val: 85 }
+    ];
+
+    class BSTNode {
+      constructor(val, x = 0, y = 0) {
+        this.val = val;
+        this.left = null;
+        this.right = null;
+        this.x = x;
+        this.y = y;
+        this.state = 'normal';
+      }
+    }
+    let bstRoot = null;
+
+    // --- Complex 8-Node Weighted Interconnected Network ---
+    let graphNodes = [
+      { id: 0, label: 'A', x: 0.12, y: 0.28, state: 'normal', dist: Infinity, fScore: Infinity },
+      { id: 1, label: 'B', x: 0.35, y: 0.18, state: 'normal', dist: Infinity, fScore: Infinity },
+      { id: 2, label: 'C', x: 0.62, y: 0.20, state: 'normal', dist: Infinity, fScore: Infinity },
+      { id: 3, label: 'D', x: 0.88, y: 0.30, state: 'normal', dist: Infinity, fScore: Infinity },
+      { id: 4, label: 'E', x: 0.18, y: 0.75, state: 'normal', dist: Infinity, fScore: Infinity },
+      { id: 5, label: 'F', x: 0.45, y: 0.80, state: 'normal', dist: Infinity, fScore: Infinity },
+      { id: 6, label: 'G', x: 0.72, y: 0.72, state: 'normal', dist: Infinity, fScore: Infinity },
+      { id: 7, label: 'H', x: 0.48, y: 0.48, state: 'normal', dist: Infinity, fScore: Infinity }
+    ];
+
+    let graphEdges = [
+      [0, 1, 4], [0, 4, 2], [1, 2, 5], [1, 7, 3],
+      [2, 3, 6], [2, 7, 2], [3, 6, 4], [4, 5, 3],
+      [5, 6, 5], [5, 7, 1], [6, 7, 3]
+    ];
+    let activeGraphEdge = null;
+    let pathEdges = []; // Final Shortest Path edges
+    let pathNodesSet = new Set();
+
+    // Code snippets dictionary
+    const CODE_SNIPPETS = {
+      graph_dijkstra: [
+        "function Dijkstra(start, target) {",
+        "  dist[start] = 0; pq.push(start);",
+        "  while (!pq.isEmpty()) {",
+        "    let u = pq.popMin();",
+        "    if (u === target) break; // Reached target",
+        "    for (let {v, weight} of adj[u]) {",
+        "      if (dist[u] + weight < dist[v]) {",
+        "        dist[v] = dist[u] + weight; // Relax Edge",
+        "        parent[v] = u; pq.push(v);",
+        "      }",
+        "    }",
+        "  }",
+        "  return reconstructShortestPath(parent, target);",
+        "}"
+      ],
+      graph_astar: [
+        "function AStar(start, target) {",
+        "  g[start] = 0; f[start] = h(start, target);",
+        "  openSet.add(start);",
+        "  while (openSet.size > 0) {",
+        "    let curr = nodeWithMinF(openSet);",
+        "    if (curr === target) return reconstructPath();",
+        "    openSet.remove(curr); closedSet.add(curr);",
+        "    for (let {neighbor, weight} of adj[curr]) {",
+        "      let tentativeG = g[curr] + weight;",
+        "      if (tentativeG < g[neighbor]) {",
+        "        g[neighbor] = tentativeG;",
+        "        f[neighbor] = g[neighbor] + h(neighbor, target);",
+        "      }",
+        "    }",
+        "  }",
+        "}"
+      ],
+      graph_bfs: [
+        "function BFS(start, target) {",
+        "  let q = [start], visited = new Set([start]);",
+        "  while (q.length) {",
+        "    let curr = q.shift();",
+        "    if (curr === target) return reconstructPath();",
+        "    for (let n of adj[curr]) {",
+        "      if (!visited.has(n)) { visited.add(n); parent[n]=curr; q.push(n); }",
+        "    }",
+        "  }",
+        "}"
+      ],
+      graph_dfs: [
+        "function DFS(start, target) {",
+        "  visited.add(start);",
+        "  if (start === target) return reconstructPath();",
+        "  for (let neighbor of adj[start]) {",
+        "    if (!visited.has(neighbor)) {",
+        "      parent[neighbor] = start;",
+        "      if (DFS(neighbor, target)) return true;",
+        "    }",
+        "  }",
+        "}"
+      ],
+      sort_bubble: [
+        "for (let i = 0; i < n - 1; i++) {",
+        "  for (let j = 0; j < n - i - 1; j++) {",
+        "    if (arr[j] > arr[j + 1]) swap(arr[j], arr[j + 1]);",
+        "  }",
+        "}"
+      ],
+      sort_selection: [
+        "for (let i = 0; i < n - 1; i++) {",
+        "  let minIdx = i;",
+        "  for (let j = i + 1; j < n; j++) {",
+        "    if (arr[j] < arr[minIdx]) minIdx = j;",
+        "  }",
+        "  swap(arr[i], arr[minIdx]);",
+        "}"
+      ],
+      sort_insertion: [
+        "for (let i = 1; i < n; i++) {",
+        "  let key = arr[i], j = i - 1;",
+        "  while (j >= 0 && arr[j] > key) {",
+        "    arr[j + 1] = arr[j]; j--;",
+        "  }",
+        "  arr[j + 1] = key;",
+        "}"
+      ],
+      array_search: [
+        "function search(arr, target) {",
+        "  for (let i = 0; i < arr.length; i++) {",
+        "    if (arr[i] === target) return i;",
+        "  }",
+        "  return -1;",
+        "}"
+      ],
+      stack_push: [ "stack.push(val);" ],
+      queue_enqueue: [ "queue.enqueue(val);" ],
+      ll_insert_head: [ "node.next = head; head = node;" ],
+      bst_insert: [ "if (val < node.val) node.left = insert(node.left, val);" ]
+    };
+
+    // --- STREAMING_CHUNK:Setting up p5 Canvas & Resizable Panel Handlers... ---
+    function setup() {
+      const parent = document.getElementById('canvasParent');
+      canvasWidth = parent.clientWidth;
+      canvasHeight = parent.clientHeight;
+      
+      const canvas = createCanvas(canvasWidth, canvasHeight);
+      canvas.parent('canvasParent');
+
+      initDefaultBST();
+      initPanelSplitters();
+      onCategoryChange();
+    }
+
+    function windowResized() {
+      const parent = document.getElementById('canvasParent');
+      if (parent) {
+        canvasWidth = parent.clientWidth;
+        canvasHeight = parent.clientHeight;
+        resizeCanvas(canvasWidth, canvasHeight);
+      }
+    }
+
+    function initPanelSplitters() {
+      const hSplitter = document.getElementById('horizontalSplitter');
+      const leftPanel = document.getElementById('leftPanel');
+      let isDraggingH = false;
+
+      hSplitter.addEventListener('mousedown', () => { isDraggingH = true; });
+      document.addEventListener('mousemove', (e) => {
+        if (isDraggingH) {
+          const newWidth = Math.max(220, Math.min(480, e.clientX));
+          leftPanel.style.width = `${newWidth}px`;
+          windowResized();
+        }
+      });
+      document.addEventListener('mouseup', () => { isDraggingH = false; });
+
+      const vSplitter = document.getElementById('verticalSplitter');
+      const bottomDrawer = document.getElementById('bottomDrawer');
+      let isDraggingV = false;
+
+      vSplitter.addEventListener('mousedown', () => { isDraggingV = true; });
+      document.addEventListener('mousemove', (e) => {
+        if (isDraggingV) {
+          const windowH = window.innerHeight;
+          const newH = Math.max(120, Math.min(350, windowH - e.clientY));
+          bottomDrawer.style.height = `${newH}px`;
+          windowResized();
+        }
+      });
+      document.addEventListener('mouseup', () => { isDraggingV = false; });
+    }
+
+    // --- STREAMING_CHUNK:Render Loop and Visualizer Canvas Drawings... ---
+    function draw() {
+      background(15, 23, 42);
+
+      // Frame execution timer
+      const speed = parseInt(document.getElementById('speedSlider').value);
+      if (isPlaying && animationQueue.length > 0) {
+        frameStepCounter++;
+        if (frameStepCounter >= (65 - speed)) {
+          executeStep(animationQueue[queueIndex]);
+          queueIndex++;
+          frameStepCounter = 0;
+          if (queueIndex >= animationQueue.length) {
+            isPlaying = false;
+            updatePlayPauseUI();
+          }
+        }
+      }
+
+      if (currentCategory === 'ds') {
+        switch (currentTarget) {
+          case 'array': drawArrayVisualizer(); break;
+          case 'stack': drawStackVisualizer(); break;
+          case 'queue': drawQueueVisualizer(); break;
+          case 'linkedlist': drawLinkedListVisualizer(); break;
+          case 'bst': drawBSTVisualizer(); break;
+        }
+      } else if (currentCategory === 'graph') {
+        drawGraphVisualizer();
+      } else if (currentCategory === 'sort') {
+        drawArrayVisualizer(true);
+      }
+    }
+
+    // Render Weighted Graph & Shortest Path Highlights
+    function drawGraphVisualizer() {
+      // 1. Draw Edges
+      for (let edge of graphEdges) {
+        let n1 = graphNodes[edge[0]];
+        let n2 = graphNodes[edge[1]];
+        let w = edge[2];
+
+        let x1 = n1.x * canvasWidth;
+        let y1 = n1.y * canvasHeight;
+        let x2 = n2.x * canvasWidth;
+        let y2 = n2.y * canvasHeight;
+
+        const isPathEdge = pathEdges.some(pe => (pe[0] === edge[0] && pe[1] === edge[1]) || (pe[1] === edge[0] && pe[0] === edge[1]));
+        const isActiveEdge = activeGraphEdge && ((activeGraphEdge[0] === edge[0] && activeGraphEdge[1] === edge[1]) || (activeGraphEdge[1] === edge[0] && activeGraphEdge[0] === edge[1]));
+
+        if (isPathEdge) {
+          // Glowing Gold/Yellow Shortest Path Line
+          stroke(234, 179, 8); // Gold
+          strokeWeight(6);
+          line(x1, y1, x2, y2);
+          stroke(253, 224, 71, 180);
+          strokeWeight(10);
+          line(x1, y1, x2, y2);
+        } else if (isActiveEdge) {
+          stroke(244, 63, 94); // Active Rose Edge
+          strokeWeight(3.5);
+          line(x1, y1, x2, y2);
+        } else {
+          stroke(71, 85, 105);
+          strokeWeight(2);
+          line(x1, y1, x2, y2);
+        }
+
+        // Edge Weight Badge
+        const midX = (x1 + x2) / 2;
+        const midY = (y1 + y2) / 2;
+        fill(15, 23, 42);
+        stroke(isPathEdge ? 234 : 51, isPathEdge ? 179 : 65, isPathEdge ? 8 : 85);
+        strokeWeight(isPathEdge ? 2 : 1);
+        rect(midX - 10, midY - 10, 20, 20, 4);
+
+        fill(isPathEdge ? 253 : 226, isPathEdge ? 224 : 232, isPathEdge ? 71 : 240);
+        noStroke();
+        textSize(10);
+        textStyle(BOLD);
+        textAlign(CENTER, CENTER);
+        text(w, midX, midY);
+      }
+
+      // 2. Draw Nodes
+      for (let n of graphNodes) {
+        let x = n.x * canvasWidth;
+        let y = n.y * canvasHeight;
+
+        const isPathNode = pathNodesSet.has(n.id);
+
+        if (isPathNode) {
+          fill(234, 179, 8, 50);
+          noStroke();
+          ellipse(x, y, 56);
+        }
+
+        setBoxFillColor(isPathNode ? 'pathNode' : (n.state || 'normal'));
+        stroke(isPathNode ? 253 : 51, isPathNode ? 224 : 65, isPathNode ? 71 : 85);
+        strokeWeight(isPathNode ? 3.5 : 2.5);
+        ellipse(x, y, 42);
+
+        fill(255);
+        noStroke();
+        textSize(15);
+        textStyle(BOLD);
+        textAlign(CENTER, CENTER);
+        text(n.label, x, y);
+
+        // Distance / Heuristic Badge beneath Node
+        if (currentTarget === 'dijkstra' || currentTarget === 'astar') {
+          let labelText = '';
+          if (currentTarget === 'dijkstra') {
+            const distTxt = n.dist === Infinity ? '∞' : n.dist;
+            labelText = `cost: ${distTxt}`;
+          } else {
+            const gTxt = n.dist === Infinity ? '∞' : n.dist;
+            const fTxt = n.fScore === Infinity ? '∞' : n.fScore.toFixed(1);
+            labelText = `g:${gTxt} f:${fTxt}`;
+          }
+          fill(isPathNode ? 253 : 148, isPathNode ? 224 : 163, isPathNode ? 71 : 184);
+          textSize(11);
+          textStyle(NORMAL);
+          text(labelText, x, y + 30);
+        }
+      }
+    }
+
+    function drawArrayVisualizer(isBarChart = false) {
+      if (!arrayData || arrayData.length === 0) return;
+
+      if (!isBarChart) {
+        const boxWidth = Math.min(65, (canvasWidth - 100) / arrayData.length);
+        const boxHeight = 65;
+        const startX = (canvasWidth - (arrayData.length * (boxWidth + 12))) / 2;
+        const startY = canvasHeight / 2 - 30;
+
+        for (let i = 0; i < arrayData.length; i++) {
+          const x = startX + i * (boxWidth + 12);
+          const y = startY;
+          setBoxFillColor(highlightedIndices[i] || 'normal');
+          stroke(51, 65, 85);
+          strokeWeight(2);
+          rect(x, y, boxWidth, boxHeight, 10);
+
+          fill(148, 163, 184);
+          noStroke();
+          textSize(11);
+          textAlign(CENTER, BOTTOM);
+          text(`[${i}]`, x + boxWidth / 2, y - 8);
+
+          fill(255);
+          textSize(18);
+          textFont('monospace');
+          textStyle(BOLD);
+          textAlign(CENTER, CENTER);
+          text(arrayData[i], x + boxWidth / 2, y + boxHeight / 2);
+        }
+      } else {
+        const barWidth = Math.min(45, (canvasWidth - 120) / arrayData.length);
+        const maxVal = Math.max(...arrayData, 100);
+        const maxBarHeight = canvasHeight - 120;
+        const startX = (canvasWidth - (arrayData.length * (barWidth + 8))) / 2;
+        const startY = canvasHeight - 40;
+
+        for (let i = 0; i < arrayData.length; i++) {
+          const barH = (arrayData[i] / maxVal) * maxBarHeight;
+          const x = startX + i * (barWidth + 8);
+          const y = startY - barH;
+
+          setBoxFillColor(highlightedIndices[i] || 'normal');
+          stroke(30, 41, 59);
+          strokeWeight(1.5);
+          rect(x, y, barWidth, barH, 6, 6, 0, 0);
+
+          fill(226, 232, 240);
+          noStroke();
+          textSize(11);
+          textAlign(CENTER, BOTTOM);
+          text(arrayData[i], x + barWidth / 2, y - 6);
+        }
+      }
+    }
+
+    function drawStackVisualizer() {
+      const boxWidth = 140;
+      const boxHeight = 40;
+      const startX = canvasWidth / 2 - boxWidth / 2;
+      const startY = canvasHeight - 60;
+
+      stroke(71, 85, 105);
+      strokeWeight(3);
+      noFill();
+      const maxH = 6 * (boxHeight + 8);
+      line(startX - 10, startY - maxH, startX - 10, startY + boxHeight + 5);
+      line(startX - 10, startY + boxHeight + 5, startX + boxWidth + 10, startY + boxHeight + 5);
+      line(startX + boxWidth + 10, startY + boxHeight + 5, startX + boxWidth + 10, startY - maxH);
+
+      for (let i = 0; i < stackData.length; i++) {
+        const y = startY - i * (boxHeight + 8);
+        setBoxFillColor(highlightedIndices[i] || 'normal');
+        stroke(51, 65, 85);
+        strokeWeight(2);
+        rect(startX, y, boxWidth, boxHeight, 8);
+
+        fill(255);
+        noStroke();
+        textSize(15);
+        textAlign(CENTER, CENTER);
+        text(stackData[i], startX + boxWidth / 2, y + boxHeight / 2);
+
+        if (i === stackData.length - 1) {
+          fill(129, 140, 248);
+          textSize(11);
+          textAlign(LEFT, CENTER);
+          text('← TOP', startX + boxWidth + 20, y + boxHeight / 2);
+        }
+      }
+    }
+
+    function drawQueueVisualizer() {
+      const boxWidth = 55;
+      const boxHeight = 55;
+      const startX = 100;
+      const startY = canvasHeight / 2 - boxHeight / 2;
+
+      stroke(51, 65, 85);
+      strokeWeight(2);
+      line(60, startY - 10, canvasWidth - 60, startY - 10);
+      line(60, startY + boxHeight + 10, canvasWidth - 60, startY + boxHeight + 10);
+
+      for (let i = 0; i < queueData.length; i++) {
+        const x = startX + i * (boxWidth + 12);
+        setBoxFillColor(highlightedIndices[i] || 'normal');
+        stroke(51, 65, 85);
+        strokeWeight(2);
+        rect(x, startY, boxWidth, boxHeight, 10);
+
+        fill(255);
+        noStroke();
+        textSize(15);
+        textAlign(CENTER, CENTER);
+        text(queueData[i], x + boxWidth / 2, startY + boxHeight / 2);
+
+        if (i === 0) {
+          fill(52, 211, 153);
+          textSize(11);
+          textAlign(CENTER, BOTTOM);
+          text('FRONT', x + boxWidth / 2, startY - 14);
+        }
+        if (i === queueData.length - 1) {
+          fill(251, 146, 60);
+          textSize(11);
+          textAlign(CENTER, TOP);
+          text('REAR', x + boxWidth / 2, startY + boxHeight + 14);
+        }
+      }
+    }
+
+    function drawLinkedListVisualizer() {
+      if (linkedListNodes.length === 0) return;
+      const nodeR = 24;
+      const spacing = Math.min(130, (canvasWidth - 100) / linkedListNodes.length);
+      const startX = 80;
+      const startY = canvasHeight / 2;
+
+      for (let i = 0; i < linkedListNodes.length; i++) {
+        const x = startX + i * spacing;
+        const node = linkedListNodes[i];
+
+        if (i < linkedListNodes.length - 1) {
+          const nextX = startX + (i + 1) * spacing;
+          stroke(148, 163, 184);
+          strokeWeight(2);
+          line(x + nodeR, startY, nextX - nodeR - 6, startY);
+          fill(148, 163, 184);
+          triangle(nextX - nodeR - 6, startY - 4, nextX - nodeR - 6, startY + 4, nextX - nodeR, startY);
+        }
+
+        setBoxFillColor(highlightedIndices[i] || 'normal');
+        stroke(51, 65, 85);
+        strokeWeight(2.5);
+        ellipse(x, startY, nodeR * 2);
+
+        fill(255);
+        noStroke();
+        textSize(13);
+        textAlign(CENTER, CENTER);
+        text(node.val, x, startY);
+      }
+    }
+
+    function drawBSTVisualizer() {
+      if (!bstRoot) return;
+      calculateBSTPositions(bstRoot, canvasWidth / 2, 50, canvasWidth / 4);
+      renderBSTNode(bstRoot);
+    }
+
+    function calculateBSTPositions(node, x, y, offset) {
+      if (!node) return;
+      node.x = x;
+      node.y = y;
+      if (node.left) calculateBSTPositions(node.left, x - offset, y + 60, offset / 1.9);
+      if (node.right) calculateBSTPositions(node.right, x + offset, y + 60, offset / 1.9);
+    }
+
+    function renderBSTNode(node) {
+      if (!node) return;
+      stroke(71, 85, 105);
+      strokeWeight(2);
+      if (node.left) line(node.x, node.y, node.left.x, node.left.y);
+      if (node.right) line(node.x, node.y, node.right.x, node.right.y);
+
+      setBoxFillColor(node.state || 'normal');
+      stroke(51, 65, 85);
+      strokeWeight(2);
+      ellipse(node.x, node.y, 40);
+
+      fill(255);
+      noStroke();
+      textSize(13);
+      textAlign(CENTER, CENTER);
+      text(node.val, node.x, node.y);
+
+      renderBSTNode(node.left);
+      renderBSTNode(node.right);
+    }
+
+    function setBoxFillColor(state) {
+      switch (state) {
+        case 'active': fill(16, 185, 129); break;
+        case 'start': fill(168, 85, 247); break;
+        case 'pathNode': fill(234, 179, 8); break; // Glowing Gold
+        case 'comparing': fill(245, 158, 11); break;
+        case 'found': fill(16, 185, 129); break;
+        case 'swapping': fill(244, 63, 94); break;
+        case 'visited': fill(14, 165, 233); break;
+        default: fill(30, 41, 59); break;
+      }
+    }
+
+    // --- STREAMING_CHUNK:Building Dynamic UI Control Panel Builders... ---
+    function onCategoryChange() {
+      const cat = document.getElementById('categorySelect').value;
+      currentCategory = cat;
+      const targetSelect = document.getElementById('targetSelect');
+      targetSelect.innerHTML = '';
+
+      if (cat === 'graph') {
+        const graphList = [
+          { id: 'dijkstra', name: "Dijkstra's Shortest Path" },
+          { id: 'astar', name: 'A* Pathfinding Algorithm' },
+          { id: 'bfs', name: 'Breadth-First Search (BFS)' },
+          { id: 'dfs', name: 'Depth-First Search (DFS)' }
+        ];
+        graphList.forEach(item => targetSelect.innerHTML += `<option value="${item.id}">${item.name}</option>`);
+      } else if (cat === 'ds') {
+        const dsList = [
+          { id: 'array', name: 'Array Search' },
+          { id: 'stack', name: 'Stack (LIFO)' },
+          { id: 'queue', name: 'Queue (FIFO)' },
+          { id: 'linkedlist', name: 'Singly Linked List' },
+          { id: 'bst', name: 'Binary Search Tree (BST)' }
+        ];
+        dsList.forEach(item => targetSelect.innerHTML += `<option value="${item.id}">${item.name}</option>`);
+      } else {
+        const sortList = [
+          { id: 'bubble', name: 'Bubble Sort' },
+          { id: 'selection', name: 'Selection Sort' },
+          { id: 'insertion', name: 'Insertion Sort' }
+        ];
+        sortList.forEach(item => targetSelect.innerHTML += `<option value="${item.id}">${item.name}</option>`);
+      }
+
+      onTargetChange();
+    }
+
+    function onTargetChange() {
+      currentTarget = document.getElementById('targetSelect').value;
+      resetAnimationState();
+      renderControlPanel();
+      updateInfoDisplay();
+    }
+
+    function renderControlPanel() {
+      const container = document.getElementById('dynamicControls');
+      container.innerHTML = '';
+
+      if (currentCategory === 'graph') {
+        const optionsHtml = graphNodes.map(n => `<option value="${n.id}">${n.label}</option>`).join('');
+        container.innerHTML = `
+          <div class="space-y-3">
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label class="block text-[11px] font-semibold text-purple-400 mb-1">Start Node</label>
+                <select id="startNodeSelect" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200">
+                  ${optionsHtml}
+                </select>
+              </div>
+              <div>
+                <label class="block text-[11px] font-semibold text-emerald-400 mb-1">Target Node</label>
+                <select id="targetNodeSelect" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200">
+                  ${optionsHtml}
+                </select>
+              </div>
+            </div>
+            <button onclick="runGraphSearchAlgorithm()" class="w-full py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs transition flex items-center justify-center gap-1.5 shadow-lg shadow-indigo-500/20">
+              <i class="fa-solid fa-play"></i> Find Shortest Path (${currentTarget.toUpperCase()})
+            </button>
+          </div>
+        `;
+        // Defaults: Start = Node A (0), Target = Node G (6)
+        document.getElementById('startNodeSelect').value = '0';
+        document.getElementById('targetNodeSelect').value = '6';
+      } else if (currentCategory === 'ds') {
+        if (currentTarget === 'array') {
+          container.innerHTML = `
+            <div class="space-y-2">
+              <input type="number" id="inputValue" value="42" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200">
+              <button onclick="runArraySearch()" class="w-full py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs transition">
+                <i class="fa-solid fa-magnifying-glass me-1"></i> Search Target Array Value
+              </button>
+            </div>
+          `;
+        } else if (currentTarget === 'stack') {
+          container.innerHTML = `
+            <div class="space-y-2">
+              <input type="number" id="inputValue" value="99" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200">
+              <div class="grid grid-cols-2 gap-2">
+                <button onclick="runStackPush()" class="px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs transition">Push</button>
+                <button onclick="runStackPop()" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-rose-400 font-medium text-xs transition">Pop</button>
+              </div>
+            </div>
+          `;
+        } else if (currentTarget === 'queue') {
+          container.innerHTML = `
+            <div class="space-y-2">
+              <input type="number" id="inputValue" value="50" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200">
+              <div class="grid grid-cols-2 gap-2">
+                <button onclick="runQueueEnqueue()" class="px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs transition">Enqueue</button>
+                <button onclick="runQueueDequeue()" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-rose-400 font-medium text-xs transition">Dequeue</button>
+              </div>
+            </div>
+          `;
+        } else if (currentTarget === 'linkedlist') {
+          container.innerHTML = `
+            <div class="space-y-2">
+              <input type="number" id="inputValue" value="77" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200">
+              <button onclick="runLLInsertHead()" class="w-full py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs transition">Insert at Head</button>
+            </div>
+          `;
+        } else if (currentTarget === 'bst') {
+          container.innerHTML = `
+            <div class="space-y-2">
+              <input type="number" id="inputValue" value="25" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200">
+              <button onclick="runBSTInsert()" class="w-full py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs transition">Insert BST Node</button>
+            </div>
+          `;
+        }
+      } else {
+        container.innerHTML = `
+          <button onclick="runSortAlgorithm()" class="w-full py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs transition flex items-center justify-center gap-1.5">
+            <i class="fa-solid fa-play"></i> Start ${currentTarget.toUpperCase()} Sort
+          </button>
+        `;
+      }
+    }
+
+    // --- STREAMING_CHUNK:Implementing Graph Shortest Path Algorithms & Path Reconstruction Engine... ---
+    function resetAnimationState() {
+      animationQueue = [];
+      queueIndex = 0;
+      isPlaying = false;
+      highlightedIndices = {};
+      activeGraphEdge = null;
+      pathEdges = [];
+      pathNodesSet = new Set();
+      hidePathBanner();
+      resetBSTStates(bstRoot);
+      resetGraphStates();
+      updatePlayPauseUI();
+      updateStatus("Ready for execution.");
+      document.getElementById('stepCounter').innerText = `Step: 0/0`;
+      document.getElementById('statMetric').innerText = `Cost / Metric: 0`;
+    }
+
+    function resetCurrentDS() {
+      arrayData = [15, 32, 8, 42, 23, 67, 19];
+      stackData = [10, 25, 40, 55];
+      queueData = [12, 34, 56, 78];
+      linkedListNodes = [
+        { id: 1, val: 14 },
+        { id: 2, val: 28 },
+        { id: 3, val: 42 },
+        { id: 4, val: 85 }
+      ];
+      initDefaultBST();
+      resetAnimationState();
+    }
+
+    function initDefaultBST() {
+      bstRoot = new BSTNode(50);
+      bstRoot.left = new BSTNode(30);
+      bstRoot.right = new BSTNode(70);
+      bstRoot.left.left = new BSTNode(20);
+      bstRoot.left.right = new BSTNode(40);
+    }
+
+    function resetBSTStates(node) {
+      if (!node) return;
+      node.state = 'normal';
+      resetBSTStates(node.left);
+      resetBSTStates(node.right);
+    }
+
+    function resetGraphStates() {
+      for (let n of graphNodes) {
+        n.state = 'normal';
+        n.dist = Infinity;
+        n.fScore = Infinity;
+      }
+    }
+
+    function executeStep(step) {
+      if (!step) return;
+
+      if (step.highlights) highlightedIndices = step.highlights;
+      if (step.array) arrayData = [...step.array];
+      if (step.stack) stackData = [...step.stack];
+      if (step.queue) queueData = [...step.queue];
+      if (step.linkedList) linkedListNodes = [...step.linkedList];
+      if (step.activeEdge !== undefined) activeGraphEdge = step.activeEdge;
+      if (step.pathEdges) pathEdges = [...step.pathEdges];
+      if (step.pathNodesSet) pathNodesSet = new Set(step.pathNodesSet);
+
+      if (step.nodeDistances) {
+        step.nodeDistances.forEach((d, idx) => { graphNodes[idx].dist = d; });
+      }
+      if (step.nodeFScores) {
+        step.nodeFScores.forEach((f, idx) => { graphNodes[idx].fScore = f; });
+      }
+
+      if (step.graphNodeState) {
+        graphNodes[step.graphNodeState.id].state = step.graphNodeState.state;
+      }
+
+      if (step.codeLine !== undefined) renderCodeSnippet(step.snippetKey, step.codeLine);
+      if (step.status) updateStatus(step.status);
+      if (step.metric !== undefined) document.getElementById('statMetric').innerText = step.metric;
+
+      if (step.summaryBanner) {
+        showPathBanner(step.summaryBanner);
+      }
+
+      document.getElementById('stepCounter').innerText = `Step: ${queueIndex + 1}/${animationQueue.length}`;
+    }
+
+    function runGraphSearchAlgorithm() {
+      const startIdx = parseInt(document.getElementById('startNodeSelect').value);
+      const targetIdx = parseInt(document.getElementById('targetNodeSelect').value);
+      
+      if (startIdx === targetIdx) {
+        updateStatus("Start and Target nodes must be distinct.");
+        return;
+      }
+
+      resetAnimationState();
+
+      if (currentTarget === 'dijkstra') runDijkstra(startIdx, targetIdx);
+      else if (currentTarget === 'astar') runAStar(startIdx, targetIdx);
+      else if (currentTarget === 'bfs') runGraphBFS(startIdx, targetIdx);
+      else if (currentTarget === 'dfs') runGraphDFS(startIdx, targetIdx);
+    }
+
+    // Dijkstra's Algorithm with Full Shortest Path Lock-In
+    function runDijkstra(startIdx, targetIdx) {
+      let steps = [];
+      let dist = Array(graphNodes.length).fill(Infinity);
+      let parent = Array(graphNodes.length).fill(null);
+      let visited = new Set();
+
+      dist[startIdx] = 0;
+      steps.push({
+        nodeDistances: [...dist],
+        graphNodeState: { id: startIdx, state: 'start' },
+        status: `Initialized Dijkstra. Start: Node ${graphNodes[startIdx].label} (cost 0), Target: Node ${graphNodes[targetIdx].label}`,
+        snippetKey: 'graph_dijkstra',
+        codeLine: 1
+      });
+
+      while (visited.size < graphNodes.length) {
+        let minD = Infinity, u = -1;
+        for (let n = 0; n < graphNodes.length; n++) {
+          if (!visited.has(n) && dist[n] < minD) {
+            minD = dist[n];
+            u = n;
+          }
+        }
+
+        if (u === -1) break; // Unreachable nodes remaining
+        visited.add(u);
+
+        steps.push({
+          nodeDistances: [...dist],
+          graphNodeState: { id: u, state: u === startIdx ? 'start' : 'visited' },
+          status: `Extracted unvisited min-distance node ${graphNodes[u].label} with total accumulated cost = ${dist[u]}`,
+          snippetKey: 'graph_dijkstra',
+          codeLine: 3,
+          metric: `Min Cost to ${graphNodes[u].label}: ${dist[u]}`
+        });
+
+        if (u === targetIdx) break; // Reached target
+
+        for (let edge of graphEdges) {
+          let v = null, weight = edge[2];
+          if (edge[0] === u) v = edge[1];
+          else if (edge[1] === u) v = edge[0];
+
+          if (v !== null && !visited.has(v)) {
+            steps.push({ activeEdge: edge, status: `Evaluating edge (${graphNodes[u].label} ➔ ${graphNodes[v].label}, cost: ${weight})`, snippetKey: 'graph_dijkstra', codeLine: 5 });
+            
+            if (dist[u] + weight < dist[v]) {
+              dist[v] = dist[u] + weight;
+              parent[v] = u;
+              steps.push({
+                nodeDistances: [...dist],
+                graphNodeState: { id: v, state: 'comparing' },
+                status: `Relaxed edge! Updated shortest cost to Node ${graphNodes[v].label} = ${dist[v]}`,
+                snippetKey: 'graph_dijkstra',
+                codeLine: 7
+              });
+            }
+          }
+        }
+      }
+
+      // Reconstruct Optimal Path
+      reconstructAndPushPathSteps(steps, parent, startIdx, targetIdx, dist[targetIdx], 'graph_dijkstra');
+      animationQueue = steps;
+      startPlayback();
+    }
+
+    // A* Pathfinding Algorithm with Heuristic & Optimal Path Trace
+    function runAStar(startIdx, targetIdx) {
+      let steps = [];
+      let g = Array(graphNodes.length).fill(Infinity);
+      let f = Array(graphNodes.length).fill(Infinity);
+      let parent = Array(graphNodes.length).fill(null);
+      let openSet = new Set([startIdx]);
+
+      function heuristic(u) {
+        let n1 = graphNodes[u], n2 = graphNodes[targetIdx];
+        return Math.hypot(n1.x - n2.x, n1.y - n2.y) * 10;
+      }
+
+      g[startIdx] = 0;
+      f[startIdx] = heuristic(startIdx);
+
+      steps.push({
+        nodeDistances: [...g],
+        nodeFScores: [...f],
+        graphNodeState: { id: startIdx, state: 'start' },
+        status: `Initialized A*. Start Node: ${graphNodes[startIdx].label}, Target Node: ${graphNodes[targetIdx].label}`,
+        snippetKey: 'graph_astar',
+        codeLine: 1
+      });
+
+      while (openSet.size > 0) {
+        let curr = -1, minF = Infinity;
+        for (let node of openSet) {
+          if (f[node] < minF) {
+            minF = f[node];
+            curr = node;
+          }
+        }
+
+        if (curr === targetIdx) break;
+
+        openSet.delete(curr);
+        steps.push({
+          nodeDistances: [...g],
+          nodeFScores: [...f],
+          graphNodeState: { id: curr, state: curr === startIdx ? 'start' : 'visited' },
+          status: `Selected node ${graphNodes[curr].label} with minimum f(n) = ${f[curr].toFixed(1)} [g: ${g[curr]}, h: ${heuristic(curr).toFixed(1)}]`,
+          snippetKey: 'graph_astar',
+          codeLine: 5,
+          metric: `Min f(n): ${f[curr].toFixed(1)}`
+        });
+
+        for (let edge of graphEdges) {
+          let neighbor = null, weight = edge[2];
+          if (edge[0] === curr) neighbor = edge[1];
+          else if (edge[1] === curr) neighbor = edge[0];
+
+          if (neighbor !== null) {
+            let tentativeG = g[curr] + weight;
+            if (tentativeG < g[neighbor]) {
+              parent[neighbor] = curr;
+              g[neighbor] = tentativeG;
+              f[neighbor] = g[neighbor] + heuristic(neighbor);
+              openSet.add(neighbor);
+
+              steps.push({
+                nodeDistances: [...g],
+                nodeFScores: [...f],
+                activeEdge: edge,
+                graphNodeState: { id: neighbor, state: 'comparing' },
+                status: `Found shorter path to Node ${graphNodes[neighbor].label}: g=${g[neighbor]}, f=${f[neighbor].toFixed(1)}`,
+                snippetKey: 'graph_astar',
+                codeLine: 10
+              });
+            }
+          }
+        }
+      }
+
+      reconstructAndPushPathSteps(steps, parent, startIdx, targetIdx, g[targetIdx], 'graph_astar');
+      animationQueue = steps;
+      startPlayback();
+    }
+
+    // BFS Search & Path Reconstruction
+    function runGraphBFS(startIdx, targetIdx) {
+      let steps = [];
+      let visited = new Set([startIdx]);
+      let queue = [startIdx];
+      let parent = Array(graphNodes.length).fill(null);
+
+      steps.push({
+        graphNodeState: { id: startIdx, state: 'start' },
+        status: `Starting BFS from ${graphNodes[startIdx].label} targeting ${graphNodes[targetIdx].label}`,
+        snippetKey: 'graph_bfs',
+        codeLine: 1
+      });
+
+      let found = false;
+      while (queue.length > 0) {
+        let curr = queue.shift();
+        if (curr === targetIdx) { found = true; break; }
+
+        for (let edge of graphEdges) {
+          let n = null;
+          if (edge[0] === curr) n = edge[1];
+          else if (edge[1] === curr) n = edge[0];
+
+          if (n !== null && !visited.has(n)) {
+            visited.add(n);
+            parent[n] = curr;
+            queue.push(n);
+            steps.push({
+              activeEdge: edge,
+              graphNodeState: { id: n, state: 'comparing' },
+              status: `Discovered Node ${graphNodes[n].label} via BFS traversal`,
+              snippetKey: 'graph_bfs',
+              codeLine: 5
+            });
+            if (n === targetIdx) { found = true; break; }
+          }
+        }
+        if (found) break;
+      }
+
+      reconstructAndPushPathSteps(steps, parent, startIdx, targetIdx, null, 'graph_bfs');
+      animationQueue = steps;
+      startPlayback();
+    }
+
+    // DFS Search & Path Reconstruction
+    function runGraphDFS(startIdx, targetIdx) {
+      let steps = [];
+      let visited = new Set();
+      let parent = Array(graphNodes.length).fill(null);
+
+      function dfs(u) {
+        visited.add(u);
+        steps.push({
+          graphNodeState: { id: u, state: u === startIdx ? 'start' : 'visited' },
+          status: `DFS exploring Node ${graphNodes[u].label}`,
+          snippetKey: 'graph_dfs',
+          codeLine: 1
+        });
+
+        if (u === targetIdx) return true;
+
+        for (let edge of graphEdges) {
+          let v = null;
+          if (edge[0] === u) v = edge[1];
+          else if (edge[1] === u) v = edge[0];
+
+          if (v !== null && !visited.has(v)) {
+            parent[v] = u;
+            steps.push({ activeEdge: edge, status: `Traversing edge (${graphNodes[u].label} ➔ ${graphNodes[v].label})`, snippetKey: 'graph_dfs', codeLine: 4 });
+            if (dfs(v)) return true;
+          }
+        }
+        return false;
+      }
+
+      dfs(startIdx);
+      reconstructAndPushPathSteps(steps, parent, startIdx, targetIdx, null, 'graph_dfs');
+      animationQueue = steps;
+      startPlayback();
+    }
+
+    // Shortest Path Reconstruction Helper
+    function reconstructAndPushPathSteps(steps, parent, startIdx, targetIdx, cost, snippetKey) {
+      if (parent[targetIdx] === null && startIdx !== targetIdx) {
+        steps.push({
+          status: `NO PATH EXISTS from Node ${graphNodes[startIdx].label} to Node ${graphNodes[targetIdx].label}`,
+          snippetKey: snippetKey,
+          codeLine: 12
+        });
+        return;
+      }
+
+      let curr = targetIdx;
+      let finalEdges = [];
+      let finalNodes = [targetIdx];
+
+      while (parent[curr] !== null) {
+        let p = parent[curr];
+        finalEdges.push([p, curr]);
+        finalNodes.push(p);
+        curr = p;
+      }
+
+      finalNodes.reverse();
+      const pathLabelStr = finalNodes.map(idx => graphNodes[idx].label).join(' ➔ ');
+      const costStr = cost !== null ? ` (Total Cost = ${cost})` : '';
+
+      steps.push({
+        pathEdges: finalEdges,
+        pathNodesSet: finalNodes,
+        activeEdge: null,
+        status: `SHORTEST PATH FOUND: ${pathLabelStr}${costStr}`,
+        summaryBanner: `Path: ${pathLabelStr}${costStr}`,
+        snippetKey: snippetKey,
+        codeLine: 12,
+        metric: cost !== null ? `Optimal Cost: ${cost}` : `Path Length: ${finalNodes.length - 1} hops`
+      });
+    }
+
+    // Sorting Algorithms: Selection & Insertion Additions
+    function runSortAlgorithm() {
+      resetAnimationState();
+      let arr = [...arrayData];
+      let steps = [];
+
+      if (currentTarget === 'bubble') {
+        for (let i = 0; i < arr.length - 1; i++) {
+          for (let j = 0; j < arr.length - i - 1; j++) {
+            steps.push({ array: [...arr], highlights: { [j]: 'comparing', [j + 1]: 'comparing' }, status: `Comparing ${arr[j]} & ${arr[j+1]}`, snippetKey: 'sort_bubble', codeLine: 2 });
+            if (arr[j] > arr[j + 1]) {
+              let t = arr[j]; arr[j] = arr[j + 1]; arr[j + 1] = t;
+              steps.push({ array: [...arr], highlights: { [j]: 'swapping', [j + 1]: 'swapping' }, status: `Swapped ${arr[j+1]} & ${arr[j]}`, snippetKey: 'sort_bubble', codeLine: 3 });
+            }
+          }
+        }
+      } else if (currentTarget === 'selection') {
+        for (let i = 0; i < arr.length - 1; i++) {
+          let minIdx = i;
+          for (let j = i + 1; j < arr.length; j++) {
+            steps.push({ array: [...arr], highlights: { [i]: 'start', [j]: 'comparing', [minIdx]: 'active' }, status: `Finding minimum element...`, snippetKey: 'sort_selection', codeLine: 3 });
+            if (arr[j] < arr[minIdx]) minIdx = j;
+          }
+          if (minIdx !== i) {
+            let temp = arr[i]; arr[i] = arr[minIdx]; arr[minIdx] = temp;
+            steps.push({ array: [...arr], highlights: { [i]: 'swapping', [minIdx]: 'swapping' }, status: `Swapped minimum element ${arr[i]} into place`, snippetKey: 'sort_selection', codeLine: 5 });
+          }
+        }
+      } else if (currentTarget === 'insertion') {
+        for (let i = 1; i < arr.length; i++) {
+          let key = arr[i];
+          let j = i - 1;
+          while (j >= 0 && arr[j] > key) {
+            steps.push({ array: [...arr], highlights: { [j]: 'comparing', [j + 1]: 'swapping' }, status: `Shifting ${arr[j]} to the right`, snippetKey: 'sort_insertion', codeLine: 3 });
+            arr[j + 1] = arr[j];
+            j--;
+          }
+          arr[j + 1] = key;
+          steps.push({ array: [...arr], highlights: { [j + 1]: 'active' }, status: `Inserted ${key} at index ${j + 1}`, snippetKey: 'sort_insertion', codeLine: 5 });
+        }
+      }
+
+      steps.push({ array: [...arr], highlights: {}, status: `Sorting complete!` });
+      animationQueue = steps;
+      startPlayback();
+    }
+
+    // Basic DS Execution Helpers
+    function runArraySearch() {
+      const val = parseInt(document.getElementById('inputValue').value) || 42;
+      resetAnimationState();
+      let steps = [];
+      for (let i = 0; i < arrayData.length; i++) {
+        steps.push({ highlights: { [i]: 'comparing' }, status: `Searching index [${i}] = ${arrayData[i]}`, snippetKey: 'array_search', codeLine: 1 });
+        if (arrayData[i] === val) {
+          steps.push({ highlights: { [i]: 'found' }, status: `Target ${val} found at index [${i}]!`, snippetKey: 'array_search', codeLine: 2 });
+          break;
+        }
+      }
+      animationQueue = steps;
+      startPlayback();
+    }
+
+    function runStackPush() {
+      const val = parseInt(document.getElementById('inputValue').value) || 99;
+      resetAnimationState();
+      let newStack = [...stackData, val];
+      animationQueue = [{ stack: newStack, highlights: { [newStack.length - 1]: 'active' }, status: `Pushed ${val} onto Stack`, snippetKey: 'stack_push', codeLine: 0 }];
+      startPlayback();
+    }
+
+    function runStackPop() {
+      resetAnimationState();
+      let newStack = [...stackData];
+      const popped = newStack.pop();
+      animationQueue = [{ stack: newStack, highlights: {}, status: `Popped ${popped} from Stack` }];
+      startPlayback();
+    }
+
+    function runQueueEnqueue() {
+      const val = parseInt(document.getElementById('inputValue').value) || 50;
+      resetAnimationState();
+      let newQ = [...queueData, val];
+      animationQueue = [{ queue: newQ, highlights: { [newQ.length - 1]: 'active' }, status: `Enqueued ${val} at Rear`, snippetKey: 'queue_enqueue', codeLine: 0 }];
+      startPlayback();
+    }
+
+    function runQueueDequeue() {
+      resetAnimationState();
+      let newQ = [...queueData];
+      const val = newQ.shift();
+      animationQueue = [{ queue: newQ, highlights: {}, status: `Dequeued ${val} from Front` }];
+      startPlayback();
+    }
+
+    function runLLInsertHead() {
+      const val = parseInt(document.getElementById('inputValue').value) || 77;
+      resetAnimationState();
+      let newLL = [{ id: Date.now(), val: val }, ...linkedListNodes];
+      animationQueue = [{ linkedList: newLL, highlights: { 0: 'active' }, status: `Inserted (${val}) at Linked List Head`, snippetKey: 'll_insert_head', codeLine: 0 }];
+      startPlayback();
+    }
+
+    function runBSTInsert() {
+      const val = parseInt(document.getElementById('inputValue').value) || 25;
+      resetAnimationState();
+      let steps = [];
+      function helper(node) {
+        if (!node) return;
+        steps.push({ bstState: { val: node.val, state: 'comparing' }, status: `Comparing ${val} with BST node ${node.val}`, snippetKey: 'bst_insert', codeLine: 0 });
+        if (val < node.val) {
+          if (node.left) helper(node.left);
+          else {
+            node.left = new BSTNode(val);
+            steps.push({ bstState: { val: val, state: 'active' }, status: `Inserted (${val}) as left child`, snippetKey: 'bst_insert', codeLine: 0 });
+          }
+        } else {
+          if (node.right) helper(node.right);
+          else {
+            node.right = new BSTNode(val);
+            steps.push({ bstState: { val: val, state: 'active' }, status: `Inserted (${val}) as right child`, snippetKey: 'bst_insert', codeLine: 0 });
+          }
+        }
+      }
+      helper(bstRoot);
+      animationQueue = steps;
+      startPlayback();
+    }
+
+    // --- STREAMING_CHUNK:Global Animation Handlers & Explanation Text UI Binding... ---
+    function startPlayback() {
+      queueIndex = 0;
+      isPlaying = true;
+      updatePlayPauseUI();
+    }
+
+    function togglePlayPause() {
+      if (animationQueue.length === 0) return;
+      isPlaying = !isPlaying;
+      updatePlayPauseUI();
+    }
+
+    function stepForward() {
+      if (queueIndex < animationQueue.length) {
+        executeStep(animationQueue[queueIndex]);
+        queueIndex++;
+      }
+    }
+
+    function updatePlayPauseUI() {
+      const btn = document.getElementById('textPlayPause');
+      const icon = document.getElementById('iconPlayPause');
+      if (isPlaying) {
+        btn.innerText = 'Pause';
+        icon.className = 'fa-solid fa-pause';
+      } else {
+        btn.innerText = 'Play';
+        icon.className = 'fa-solid fa-play';
+      }
+    }
+
+    function updateStatus(msg) {
+      document.getElementById('statusMessage').innerText = msg;
+    }
+
+    function showPathBanner(text) {
+      const banner = document.getElementById('pathSummaryBanner');
+      const txt = document.getElementById('pathSummaryText');
+      txt.innerText = text;
+      banner.classList.remove('hidden');
+    }
+
+    function hidePathBanner() {
+      document.getElementById('pathSummaryBanner').classList.add('hidden');
+    }
+
+    function renderCodeSnippet(key, activeLine = -1) {
+      const display = document.getElementById('codeDisplay');
+      const snippet = CODE_SNIPPETS[key];
+      if (!snippet) return;
+
+      document.getElementById('algoNameDisplay').innerText = key.toUpperCase();
+      display.innerHTML = snippet.map((line, idx) => {
+        const isHighlighted = idx === activeLine;
+        return `<div class="px-2 py-0.5 rounded ${isHighlighted ? 'highlight-line' : ''}">${escapeHTML(line)}</div>`;
+      }).join('');
+    }
+
+    function escapeHTML(str) {
+      return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    function updateInfoDisplay() {
+      const info = document.getElementById('infoDisplay');
+      const descriptions = {
+        dijkstra: "<b>Dijkstra's Shortest Path:</b> Systematically evaluates paths from the Start node to find the guaranteed minimum-cost route in weighted graphs by maintaining a priority queue of unvisited node costs.",
+        astar: "<b>A* Pathfinding:</b> Combines real edge distance $g(n)$ with estimated straight-line heuristic $h(n)$ to navigate intelligently directly toward the target.",
+        bfs: "<b>Breadth-First Search (BFS):</b> Explores graph neighbor nodes level-by-level using a FIFO queue. Finds shortest path in unweighted graphs.",
+        dfs: "<b>Depth-First Search (DFS):</b> Traverses deep into branches using recursion/stack before backtracking.",
+        array: "<b>Array:</b> Sequential memory collection with $O(1)$ index access and $O(n)$ search time.",
+        stack: "<b>Stack:</b> Last-In-First-Out (LIFO) stack collection.",
+        queue: "<b>Queue:</b> First-In-First-Out (FIFO) queue collection.",
+        linkedlist: "<b>Singly Linked List:</b> Nodes connected sequentially via pointer references.",
+        bst: "<b>Binary Search Tree (BST):</b> Tree structure maintaining left < node < right order.",
+        bubble: "<b>Bubble Sort:</b> Repeatedly swaps adjacent out-of-order elements.",
+        selection: "<b>Selection Sort:</b> Scans array for minimum element and swaps it into position.",
+        insertion: "<b>Insertion Sort:</b> Inserts elements into sorted subarray position."
+      };
+
+      info.innerHTML = descriptions[currentTarget] || "Select an algorithm or data structure module to inspect concepts and real-time execution details.";
+    }
+  </script>
+</body>
+</html>
